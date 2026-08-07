@@ -1,0 +1,169 @@
+{
+  "name": "git-workbench",
+  "displayName": "Git Workbench",
+  "description": "File history and repository log inspired by IntelliJ Git tools.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Git Workbench executes Git commands in the current workspace."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitWorkbench.showFileHistory",
+        "category": "Git Workbench",
+        "title": "Show File History"
+      },
+      {
+        "command": "gitWorkbench.openLog",
+        "category": "Git Workbench",
+        "title": "Open Git Log"
+      },
+      {
+        "command": "gitWorkbench.refresh",
+        "category": "Git Workbench",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "gitWorkbench.contextMenu",
+        "label": "Git Workbench"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "gitWorkbench.contextMenu",
+          "group": "navigation@90"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "gitWorkbench.contextMenu",
+          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "group": "3_compare@90"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "submenu": "gitWorkbench.contextMenu",
+          "group": "3_compare@90"
+        }
+      ],
+      "gitWorkbench.contextMenu": [
+        {
+          "command": "gitWorkbench.showFileHistory",
+          "group": "history@1"
+        },
+        {
+          "command": "gitWorkbench.openLog",
+          "group": "history@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitWorkbench.refresh",
+          "when": "view == gitWorkbench.main",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "gitWorkbench",
+          "title": "Git Workbench",
+          "icon": "resources/git.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitWorkbench": [
+        {
+          "type": "webview",
+          "id": "gitWorkbench.main",
+          "name": "Repository"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Git Workbench",
+      "properties": {
+        "gitWorkbench.commitPageSize": {
+          "type": "number",
+          "default": 200,
+          "minimum": 20,
+          "maximum": 1000,
+          "description": "Number of commits loaded per page."
+        },
+        "gitWorkbench.fileHistoryPageSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 20,
+          "maximum": 500,
+          "description": "Number of file history entries loaded per page."
+        },
+        "gitWorkbench.maxTextFileBytes": {
+          "type": "number",
+          "default": 2097152,
+          "minimum": 65536,
+          "description": "Maximum text file size loaded into the full-file diff viewer."
+        },
+        "gitWorkbench.showCommitGraph": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render commit graph lanes in the Git Log commit list."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src webview",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test:unit": "vitest run",
+    "test:extension": "vscode-test",
+    "package": "npm run check-types && npm run lint && npm run test:unit && node esbuild.mjs --production && vsce package --allow-missing-repository"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.39.5",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^2.1.5"
+  }
+}

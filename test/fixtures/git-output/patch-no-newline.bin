@@ -1,0 +1,8 @@
+diff --git a/src/tail.txt b/src/tail.txt
+new file mode 100644
+index 0000000..69db55d
+--- /dev/null
++++ b/src/tail.txt
+@@ -0,0 +1 @@
++no trailing newline
+\ No newline at end of file

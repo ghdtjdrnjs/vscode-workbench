@@ -1,0 +1,828 @@
+/* 모든 색은 VS Code 테마 변수를 쓴다. 고정 색상은 두지 않는다. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+input,
+select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------- 탭 ---------- */
+
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 0 4px;
+  flex: 0 0 auto;
+}
+
+.tab {
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 5px 10px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab.active {
+  border-bottom-color: var(--vscode-panelTitle-activeBorder, var(--vscode-focusBorder));
+  color: var(--vscode-panelTitle-activeForeground, var(--vscode-foreground));
+}
+
+/* ---------- 페이지 레이아웃 ---------- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex: 0 0 auto;
+}
+
+.page-title {
+  font-weight: 600;
+}
+
+.page-subtitle,
+.page-count,
+.page-badge {
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-badge {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  padding: 0 6px;
+  flex: 0 0 auto;
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---------- SplitPane ---------- */
+
+.split-pane {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.split-pane-first {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-pane-second {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-handle {
+  flex: 0 0 4px;
+  cursor: col-resize;
+  background: var(--vscode-panel-border);
+  opacity: 0.5;
+}
+
+.split-handle:hover,
+.split-handle.dragging {
+  background: var(--vscode-focusBorder);
+  opacity: 1;
+}
+
+/* ---------- 가상 목록 ---------- */
+
+.virtual-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.virtual-sizer {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  cursor: default;
+  overflow: hidden;
+}
+
+.virtual-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.virtual-row.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+/* ---------- File History 행 ---------- */
+
+.history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+.history-row-top,
+.history-row-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-subject {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-hash,
+.history-date,
+.history-author,
+.history-rename {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.virtual-row.selected .history-hash,
+.virtual-row.selected .history-date,
+.virtual-row.selected .history-author,
+.virtual-row.selected .history-rename,
+.virtual-row.selected .commit-author,
+.virtual-row.selected .commit-date,
+.virtual-row.selected .commit-hash {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.history-hash,
+.commit-hash,
+.mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.history-rename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Commit 목록 행 ---------- */
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.commit-graph-cell {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.commit-graph {
+  display: block;
+}
+
+.commit-subject {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-author {
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+}
+
+.commit-date,
+.commit-hash {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.decoration {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 0.85em;
+}
+
+/* ---------- Branch tree ---------- */
+
+.branch-tree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.branch-filter {
+  margin: 4px;
+  flex: 0 0 auto;
+}
+
+.branch-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.branch-group-header,
+.branch-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.branch-group-header {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.branch-item {
+  padding-left: 20px;
+}
+
+.branch-item.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-upstream,
+.branch-count {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.current-marker {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-green));
+}
+
+.chevron {
+  width: 10px;
+  display: inline-block;
+}
+
+/* ---------- 검색 ---------- */
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.search-bar input[type='search'] {
+  flex: 1 1 100px;
+  min-width: 80px;
+}
+
+.date-separator {
+  color: var(--vscode-descriptionForeground);
+}
+
+.search-count {
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.search-error {
+  color: var(--vscode-errorForeground);
+  white-space: nowrap;
+}
+
+/* ---------- Commit 상세 ---------- */
+
+.commit-details {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.detail-scroll {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  max-height: 55%;
+}
+
+.detail-subject {
+  margin: 0 0 6px;
+  font-size: 1.05em;
+}
+
+.detail-body {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--vscode-editor-font-family, monospace);
+  color: var(--vscode-descriptionForeground);
+}
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 8px;
+}
+
+.detail-meta dt {
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.detail-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.branch-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.chip {
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  font-size: 0.85em;
+}
+
+.chip.local {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.changed-files {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.changed-files-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  color: var(--vscode-descriptionForeground);
+  flex: 0 0 auto;
+}
+
+.hint {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.path-old {
+  color: var(--vscode-descriptionForeground);
+  text-decoration: line-through;
+}
+
+.path-arrow {
+  color: var(--vscode-descriptionForeground);
+}
+
+.parent-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.detail-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex: 0 0 auto;
+}
+
+.detail-nav-path {
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 상태 chip ---------- */
+
+.status-chip {
+  display: inline-block;
+  flex: 0 0 auto;
+  min-width: 18px;
+  margin-right: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 0.85em;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.status-A {
+  color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green));
+}
+
+.status-M {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-blue));
+}
+
+.status-D {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-charts-red));
+}
+
+.status-R,
+.status-C {
+  color: var(--vscode-gitDecoration-renamedResourceForeground, var(--vscode-charts-purple));
+}
+
+/* ---------- Diff ---------- */
+
+.diff-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.diff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex: 0 0 auto;
+}
+
+.diff-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.segmented {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.segmented button {
+  border-radius: 0;
+}
+
+.segmented button:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.segmented button:last-child {
+  border-radius: 0 3px 3px 0;
+  border-left: none;
+}
+
+.segmented button.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.diff-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.diff-notice {
+  padding: 4px 8px;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.diff-notice.subtle {
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+  z-index: 1;
+}
+
+.diff-lines {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 12px);
+  line-height: 1.45;
+  min-width: max-content;
+}
+
+.diff-line,
+.side-row {
+  display: flex;
+  white-space: pre;
+}
+
+.diff-gutter {
+  flex: 0 0 auto;
+  width: 46px;
+  padding: 0 6px;
+  text-align: right;
+  color: var(--vscode-editorLineNumber-foreground);
+  user-select: none;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-marker {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+}
+
+.diff-content {
+  flex: 1 1 auto;
+  padding-right: 12px;
+  white-space: pre;
+}
+
+.diff-line.add,
+.diff-content.add {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(155, 185, 85, 0.2));
+}
+
+.diff-line.delete,
+.diff-content.delete {
+  background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2));
+}
+
+.diff-line.hunk-header,
+.side-row.hunk-header {
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  color: var(--vscode-descriptionForeground);
+}
+
+.diff-eof-note {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* side-by-side: gutter/content가 두 쌍 */
+.diff-lines.side .side-row .diff-content {
+  flex: 1 1 50%;
+  min-width: 0;
+  border-right: 1px solid var(--vscode-panel-border);
+  overflow: hidden;
+}
+
+.diff-content.empty-cell {
+  background: var(--vscode-diffEditor-diagonalFill, transparent);
+  opacity: 0.4;
+}
+
+.collapsed-region {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.collapsed-button {
+  padding: 0 6px;
+  line-height: 1.2;
+}
+
+.collapsed-label {
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  text-align: left;
+  flex: 1 1 auto;
+}
+
+/* ---------- 상태 표시 ---------- */
+
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.state-block.error strong {
+  color: var(--vscode-errorForeground);
+}
+
+.state-detail {
+  white-space: pre-wrap;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--vscode-panel-border);
+  border-top-color: var(--vscode-focusBorder);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+.skeleton-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-row {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background, var(--vscode-panel-border));
+  opacity: 0.6;
+}
+
+.repo-select {
+  max-width: 240px;
+}
