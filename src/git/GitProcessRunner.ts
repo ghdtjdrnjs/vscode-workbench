@@ -21,10 +21,19 @@ const MAX_STDERR_BYTES = 32 * 1024;
  * 사용자 입력이 shell 문자열로 합쳐지지 않는 것이 이 클래스의 핵심 계약이다.
  */
 export class GitProcessRunner {
+  /**
+   * gitPath를 함수로 받는 이유: 확장이 시작될 때 내장 Git extension이 아직
+   * git 실행 파일을 찾지 못했을 수 있다. 생성자에서 확정하면 그 순간 예외가 나고
+   * 확장 활성화가 통째로 실패한다. 실제로 명령을 실행할 때 해석한다.
+   */
   public constructor(
-    private readonly gitPath: string,
+    private readonly gitPath: string | (() => string),
     private readonly output: vscode.OutputChannel,
   ) {}
+
+  private resolvePath(): string {
+    return typeof this.gitPath === 'function' ? this.gitPath() : this.gitPath;
+  }
 
   public run(
     cwd: string,
@@ -43,7 +52,7 @@ export class GitProcessRunner {
       }
 
       const child = spawn(
-        this.gitPath,
+        this.resolvePath(),
         // core.quotepath=false: 한글/UTF-8 경로가 diff 헤더에서 C-escape되지 않게 한다.
         ['--no-pager', '-c', 'core.quotepath=false', ...args],
         {

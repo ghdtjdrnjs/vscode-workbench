@@ -135,6 +135,20 @@ export class CommitLogService {
       record => record.commit,
     );
 
+    // 검색어가 commit hash로 풀리면 그 커밋을 맨 앞에 붙인다.
+    // --grep은 메시지만 보기 때문에 hash를 입력해도 걸리지 않는다.
+    if (skip === 0 && query.filters.message) {
+      const byHash = await this.findByHash(
+        repository.rootUri.fsPath,
+        query.filters.message,
+        token,
+      );
+
+      if (byHash && !commits.some(commit => commit.hash === byHash.hash)) {
+        commits.unshift(byHash);
+      }
+    }
+
     const page: CommitLogPage = {
       commits,
       hasMore,
@@ -145,7 +159,61 @@ export class CommitLogService {
 
     return page;
   }
+
+  /**
+   * 검색어를 commit hash로 해석해 본다.
+   * 풀리지 않으면 undefined. 일반 텍스트 검색을 방해하지 않도록 오류는 삼킨다.
+   */
+  private async findByHash(
+    cwd: string,
+    value: string,
+    token: vscode.CancellationToken,
+  ): Promise<CommitSummary | undefined> {
+    const candidate = value.trim();
+
+    if (!HASH_LIKE.test(candidate)) {
+      return undefined;
+    }
+
+    let fullHash: string;
+
+    try {
+      const output = await this.runner.runText(
+        cwd,
+        ['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`],
+        token,
+      );
+      fullHash = output.trim();
+    } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+        throw error;
+      }
+      // 존재하지 않거나 모호한 접두어. 검색어를 그냥 텍스트로 둔다.
+      return undefined;
+    }
+
+    if (!/^[0-9a-f]{40}$/.test(fullHash)) {
+      return undefined;
+    }
+
+    const result = await this.runner.run(
+      cwd,
+      [
+        'show',
+        '--no-patch',
+        '--date=iso-strict',
+        `--format=${COMMIT_FORMAT}`,
+        fullHash,
+      ],
+      token,
+    );
+
+    return parseCommitRecords(result.stdout, 'git show --no-patch')[0]?.commit;
+  }
 }
+
+/** commit hash 접두어로 보이는 문자열이면 실제 커밋으로 풀어 본다. */
+const HASH_LIKE = /^[0-9a-fA-F]{4,40}$/;
 
 export function filterHash(filters: CommitFilters): string {
   return [

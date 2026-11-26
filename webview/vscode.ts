@@ -3,6 +3,7 @@ import type {
   ExtensionNotification,
   ExtensionResponse,
   RequestGroup,
+  WebviewEvent,
   WebviewRequest,
 } from '../src/shared/protocol';
 
@@ -141,16 +142,80 @@ export function isSuperseded(error: unknown): boolean {
 }
 
 /**
+ * 화면 오류를 Extension Host의 Output 채널로 보낸다.
+ * webview 콘솔은 사용자가 보기 어렵다. request()를 거치지 않아 요청 흐름이 깨져도 전달된다.
+ */
+export function reportError(error: unknown, componentStack?: string): void {
+  const event: WebviewEvent = {
+    type: 'webview/error',
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    componentStack,
+  };
+  api.postMessage(event);
+}
+
+/** Extension Host에 webview HTML을 다시 로드해 달라고 한다. JS 상태가 모두 초기화된다. */
+export function requestReload(): void {
+  const event: WebviewEvent = { type: 'webview/reload' };
+  api.postMessage(event);
+}
+
+// React 밖에서 난 오류(이벤트 핸들러, 비동기)도 원인을 남긴다.
+window.addEventListener('error', event => {
+  reportError(event.error ?? event.message);
+});
+
+window.addEventListener('unhandledrejection', event => {
+  if (!isSuperseded(event.reason)) {
+    reportError(event.reason);
+  }
+});
+
+/**
  * Webview state에 저장하는 UI 값.
  * localStorage 대신 VS Code state를 쓰면 panel을 숨겼다 열어도 유지된다.
  */
+/**
+ * 저장 형식이 바뀌거나 예전 값이 잘못 저장됐을 때 올린다.
+ * 값이 다르면 저장된 크기를 버리고 기본값에서 다시 시작한다.
+ */
+const UI_STATE_VERSION = 2;
+
 interface UiState {
+  version: number;
   splitRatios: Record<string, number>;
+  flags: Record<string, boolean>;
 }
 
 function readUiState(): UiState {
   const state = api.getState<Partial<UiState>>();
-  return { splitRatios: state?.splitRatios ?? {} };
+
+  // 이전 버전에서는 리레이아웃마다 비율이 덮어써져 한쪽 끝에 고정된 값이
+  // 남아 있을 수 있다. 크기만 버리고 접힘 여부 같은 선택은 유지한다.
+  if (state?.version !== UI_STATE_VERSION) {
+    return {
+      version: UI_STATE_VERSION,
+      splitRatios: {},
+      flags: state?.flags ?? {},
+    };
+  }
+
+  return {
+    version: UI_STATE_VERSION,
+    splitRatios: state.splitRatios ?? {},
+    flags: state.flags ?? {},
+  };
+}
+
+export function getUiFlag(key: string, fallback: boolean): boolean {
+  const stored = readUiState().flags[key];
+  return typeof stored === 'boolean' ? stored : fallback;
+}
+
+export function setUiFlag(key: string, value: boolean): void {
+  const state = readUiState();
+  api.setState({ ...state, flags: { ...state.flags, [key]: value } });
 }
 
 export function getSplitRatio(key: string, fallback: number): number {

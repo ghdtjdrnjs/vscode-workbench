@@ -30,6 +30,10 @@ const USER_MESSAGES: Record<GitWorkbenchErrorCode, string> = {
   UNSUPPORTED_WORKSPACE:
     'Git Workbench는 신뢰된 workspace에서만 동작합니다.',
   NO_HISTORY: '이 파일에 대한 commit 이력이 없습니다.',
+  WORKING_TREE_DIRTY:
+    '작업 디렉터리에 커밋되지 않은 변경이 있습니다. 먼저 커밋하거나 stash하세요.',
+  CHERRY_PICK_CONFLICT:
+    'cherry-pick 중 충돌이 발생했습니다. 충돌을 해결한 뒤 이어서 진행하거나 취소하세요.',
   UNKNOWN: '알 수 없는 오류가 발생했습니다.',
 };
 

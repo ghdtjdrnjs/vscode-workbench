@@ -1,10 +1,16 @@
 import * as assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'local.git-workbench';
 
 interface MinimalRepository {
   rootUri: vscode.Uri;
+}
+
+/** 확장이 쓰는 것과 같은 방식으로 저장소 id를 만든다. */
+function repositoryIdOf(rootUri: vscode.Uri): string {
+  return createHash('sha1').update(rootUri.toString()).digest('hex').slice(0, 12);
 }
 
 /** 내장 Git extension이 workspace의 저장소를 찾을 때까지 기다린다. */
@@ -42,6 +48,7 @@ suite('Git Workbench extension', () => {
       'gitWorkbench.showFileHistory',
       'gitWorkbench.openLog',
       'gitWorkbench.refresh',
+      'gitWorkbench.reloadView',
     ]) {
       assert.ok(commands.includes(id), `${id} 가 등록되지 않았다`);
     }
@@ -99,7 +106,41 @@ suite('Git Workbench extension', () => {
     await vscode.commands.executeCommand('gitWorkbench.openLog');
   });
 
+  test('과거 파일 내용을 편집기용 스킴으로 읽을 수 있다', async () => {
+    const repository = await waitForRepository();
+
+    // 확장이 등록한 읽기 전용 스킴으로 특정 커밋의 파일을 연다.
+    const uri = vscode.Uri.from({
+      scheme: 'git-workbench',
+      path: '/src/b.ts',
+      query: JSON.stringify({ repositoryId: repositoryIdOf(repository.rootUri), revision: 'main' }),
+    });
+
+    const document = await vscode.workspace.openTextDocument(uri);
+
+    assert.ok(document.getText().length > 0, '파일 내용을 읽지 못했다');
+    assert.match(document.getText(), /export const/);
+    // 경로가 살아 있어야 편집기가 언어를 알아본다.
+    assert.equal(document.languageId, 'typescript');
+  });
+
+  test('없는 revision은 빈 문서로 연다', async () => {
+    const repository = await waitForRepository();
+    const uri = vscode.Uri.from({
+      scheme: 'git-workbench',
+      path: '/src/b.ts',
+      query: JSON.stringify({ repositoryId: repositoryIdOf(repository.rootUri), revision: '' }),
+    });
+
+    const document = await vscode.workspace.openTextDocument(uri);
+    assert.equal(document.getText(), '');
+  });
+
   test('refresh command가 예외 없이 실행된다', async () => {
     await vscode.commands.executeCommand('gitWorkbench.refresh');
+  });
+
+  test('reloadView command가 예외 없이 실행된다', async () => {
+    await vscode.commands.executeCommand('gitWorkbench.reloadView');
   });
 });

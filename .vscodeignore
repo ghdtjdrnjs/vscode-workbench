@@ -16,3 +16,4 @@ tsconfig.json
 .gitignore
 .git/**
 vscode-git-workbench-implementation-plan.md
+docs/**

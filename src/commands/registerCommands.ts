@@ -33,6 +33,10 @@ export function registerCommands(
     vscode.commands.registerCommand('gitWorkbench.refresh', () => {
       options.provider.refresh();
     }),
+
+    vscode.commands.registerCommand('gitWorkbench.reloadView', () => {
+      options.provider.reloadView();
+    }),
   ];
 }
 

@@ -10,6 +10,7 @@ interface CommitListProps {
   selectedIndex: number;
   showGraph: boolean;
   onSelect: (index: number) => void;
+  onContextMenu?: (index: number, x: number, y: number) => void;
   onReachEnd?: () => void;
 }
 
@@ -20,6 +21,7 @@ export function CommitList({
   selectedIndex,
   showGraph,
   onSelect,
+  onContextMenu,
   onReachEnd,
 }: CommitListProps): JSX.Element {
   const graph = useMemo(
@@ -38,6 +40,7 @@ export function CommitList({
       ariaLabel="커밋 목록"
       selectedIndex={selectedIndex}
       onSelect={onSelect}
+      onContextMenu={onContextMenu}
       onReachEnd={onReachEnd}
       keyOf={commit => commit.hash}
       renderRow={(commit, index) => (

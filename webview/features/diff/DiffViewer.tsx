@@ -25,6 +25,8 @@ interface DiffViewerProps {
   onChangeLayout: (layout: DiffLayout) => void;
   title?: string;
   emptyLabel: string;
+  /** 있으면 툴바에 "편집기에서 열기" 버튼을 보여 준다. */
+  onOpenInEditor?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,6 +49,7 @@ export function DiffViewer({
   onChangeLayout,
   title,
   emptyLabel,
+  onOpenInEditor,
 }: DiffViewerProps): JSX.Element {
   return (
     <div className="diff-viewer">
@@ -79,6 +82,17 @@ export function DiffViewer({
             전체 파일
           </button>
         </div>
+        {onOpenInEditor ? (
+          <button
+            type="button"
+            className="open-editor-button"
+            title="VS Code diff 편집기에서 열기"
+            disabled={!diff}
+            onClick={onOpenInEditor}
+          >
+            편집기에서 열기
+          </button>
+        ) : null}
         <div className="segmented" role="group" aria-label="표시 방식">
           <button
             type="button"

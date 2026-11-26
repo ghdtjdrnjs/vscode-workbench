@@ -66,6 +66,12 @@ export function CommitSearchBar({
     // filters/onChange는 매 렌더 새로 생기지 않도록 상위에서 관리한다.
   }, [draft, filters, onChange]);
 
+  // event 값은 여기서 먼저 꺼낸다. updater 안에서 event를 읽으면
+  // 렌더 시점으로 미뤄졌을 때 currentTarget이 이미 null이라 화면 전체가 죽는다.
+  const updateDraft = (key: keyof DraftFilters, value: string): void => {
+    setDraft(current => ({ ...current, [key]: value }));
+  };
+
   const reset = (): void => {
     setDraft({ author: '', since: '', until: '', message: '' });
     onChange({ ref: filters.ref, allRefs: filters.allRefs });
@@ -76,29 +82,23 @@ export function CommitSearchBar({
       <input
         type="search"
         value={draft.message}
-        placeholder="커밋 메시지"
-        aria-label="커밋 메시지 검색"
-        onChange={event =>
-          setDraft(current => ({ ...current, message: event.currentTarget.value }))
-        }
+        placeholder="커밋 메시지 또는 hash"
+        aria-label="커밋 메시지 또는 hash 검색"
+        onChange={event => updateDraft('message', event.currentTarget.value)}
       />
       <input
         type="search"
         value={draft.author}
         placeholder="작성자"
         aria-label="작성자 검색"
-        onChange={event =>
-          setDraft(current => ({ ...current, author: event.currentTarget.value }))
-        }
+        onChange={event => updateDraft('author', event.currentTarget.value)}
       />
       <input
         type="date"
         value={draft.since}
         aria-label="시작 날짜"
         title="시작 날짜"
-        onChange={event =>
-          setDraft(current => ({ ...current, since: event.currentTarget.value }))
-        }
+        onChange={event => updateDraft('since', event.currentTarget.value)}
       />
       <span className="date-separator">~</span>
       <input
@@ -106,9 +106,7 @@ export function CommitSearchBar({
         value={draft.until}
         aria-label="종료 날짜"
         title="종료 날짜"
-        onChange={event =>
-          setDraft(current => ({ ...current, until: event.currentTarget.value }))
-        }
+        onChange={event => updateDraft('until', event.currentTarget.value)}
       />
       <button type="button" onClick={reset}>
         초기화

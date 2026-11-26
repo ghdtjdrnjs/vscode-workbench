@@ -88,6 +88,30 @@ export async function loadCommitDetail(input: {
   return response.detail;
 }
 
+export async function openDiffInEditor(input: {
+  repositoryId: string;
+  commitHash: string;
+  parentIndex: number;
+  oldPath?: string;
+  newPath: string;
+}): Promise<void> {
+  await request<Response<'diff/openedInEditor'>>({
+    type: 'diff/openInEditor',
+    ...input,
+  });
+}
+
+export async function cherryPick(input: {
+  repositoryId: string;
+  commitHash: string;
+}): Promise<{ status: string; message: string }> {
+  const response = await request<Response<'commit/cherryPickResult'>>({
+    type: 'commit/cherryPick',
+    ...input,
+  });
+  return { status: response.status, message: response.message };
+}
+
 export async function loadDiff(input: {
   repositoryId: string;
   commitHash: string;

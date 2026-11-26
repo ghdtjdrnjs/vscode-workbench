@@ -64,6 +64,21 @@ export type WebviewRequest =
       newPath: string;
       mode: 'changes' | 'full';
     }
+  | {
+      type: 'diff/openInEditor';
+      requestId: string;
+      repositoryId: string;
+      commitHash: string;
+      parentIndex: number;
+      oldPath?: string;
+      newPath: string;
+    }
+  | {
+      type: 'commit/cherryPick';
+      requestId: string;
+      repositoryId: string;
+      commitHash: string;
+    }
   | { type: 'request/cancel'; requestId: string; targetRequestId: string };
 
 export type ExtensionResponse =
@@ -85,6 +100,13 @@ export type ExtensionResponse =
     }
   | { type: 'commitDetail/result'; requestId: string; detail: CommitDetail }
   | { type: 'diff/result'; requestId: string; diff: DiffModel }
+  | { type: 'diff/openedInEditor'; requestId: string }
+  | {
+      type: 'commit/cherryPickResult';
+      requestId: string;
+      status: 'applied' | 'conflict' | 'empty' | 'cancelled';
+      message: string;
+    }
   | {
       type: 'request/error';
       requestId: string;
@@ -107,6 +129,19 @@ export type ExtensionNotification =
 
 export type ExtensionMessage = ExtensionResponse | ExtensionNotification;
 
+/**
+ * Webview가 응답 없이 보내는 알림. request 흐름과 별개라 MessageRouter를 거치지 않는다.
+ * 화면이 죽은 상황에서도 보낼 수 있어야 하므로 requestId가 없다.
+ */
+export type WebviewEvent =
+  | {
+      type: 'webview/error';
+      message: string;
+      stack?: string;
+      componentStack?: string;
+    }
+  | { type: 'webview/reload' };
+
 /** 요청 그룹. 같은 그룹에 새 요청이 오면 이전 요청을 취소한다. */
 export type RequestGroup =
   | 'fileHistory'
@@ -128,6 +163,12 @@ export function requestGroupOf(type: WebviewRequest['type']): RequestGroup {
       return 'diff';
     case 'refs/load':
       return 'refs';
+    case 'commit/cherryPick':
+      // 쓰기 작업이다. 다른 요청 때문에 중간에 취소되면 안 된다.
+      return 'misc';
+    case 'diff/openInEditor':
+      // 편집기를 여는 동작이라 뒤이은 diff 요청에 취소되면 안 된다.
+      return 'misc';
     default:
       return 'misc';
   }

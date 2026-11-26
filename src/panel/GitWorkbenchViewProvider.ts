@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { API as GitApi } from '../api/git';
+import { CherryPickService } from '../git/CherryPickService';
 import { CommitDetailService } from '../git/CommitDetailService';
 import { CommitLogService } from '../git/CommitLogService';
 import { DiffService } from '../git/DiffService';
@@ -9,12 +10,16 @@ import { GitProcessRunner } from '../git/GitProcessRunner';
 import { GitQueryCache } from '../git/GitQueryCache';
 import { RepositoryResolver } from '../git/RepositoryResolver';
 import { resolveGitPath } from '../git/GitApiProvider';
+import { assertCommitHash, assertRelativePath } from '../git/validation';
 import { DEFAULT_MAX_TEXT_FILE_BYTES } from '../shared/constants';
-import type { ExtensionMessage } from '../shared/protocol';
+import type { ExtensionMessage, WebviewEvent } from '../shared/protocol';
+import { GitContentProvider, toContentUri } from './GitContentProvider';
 import { getWebviewHtml } from './getWebviewHtml';
 import { MessageRouter } from './MessageRouter';
 
 const MAX_PENDING_NOTIFICATIONS = 16;
+/** 연달아 울리는 git state 이벤트를 이 시간만큼 묶는다. */
+const REPOSITORY_CHANGE_DEBOUNCE_MS = 700;
 
 export interface ProviderOptions {
   context: vscode.ExtensionContext;
@@ -36,6 +41,8 @@ export class GitWorkbenchViewProvider
   private webviewReady = false;
   /** 준비 전에 도착한 알림. 오래된 것부터 버린다. */
   private pendingNotifications: ExtensionMessage[] = [];
+  private changeTimer?: ReturnType<typeof setTimeout>;
+  private lastRepositorySignature = '';
 
   private readonly cache: GitQueryCache;
   private readonly resolver: RepositoryResolver;
@@ -44,12 +51,15 @@ export class GitWorkbenchViewProvider
   private readonly commitLog: CommitLogService;
   private readonly commitDetail: CommitDetailService;
   private readonly diff: DiffService;
+  private readonly cherryPick: CherryPickService;
+  public readonly contentProvider: GitContentProvider;
 
   private constructor(private readonly options: ProviderOptions) {
     this.cache = new GitQueryCache(options.output);
     this.resolver = new RepositoryResolver(options.gitApi);
+    // 경로는 실행 시점에 해석한다. 시작 시점에는 아직 준비되지 않았을 수 있다.
     this.runner = new GitProcessRunner(
-      resolveGitPath(options.gitApi),
+      () => resolveGitPath(options.gitApi),
       options.output,
     );
 
@@ -74,6 +84,14 @@ export class GitWorkbenchViewProvider
           .getConfiguration('gitWorkbench')
           .get<number>('maxTextFileBytes', DEFAULT_MAX_TEXT_FILE_BYTES),
     );
+
+    this.cherryPick = new CherryPickService(
+      this.runner,
+      this.resolver,
+      this.cache,
+    );
+
+    this.contentProvider = new GitContentProvider(this.runner, this.resolver);
 
     this.subscribeToRepositoryEvents();
   }
@@ -104,6 +122,8 @@ export class GitWorkbenchViewProvider
       commitLog: this.commitLog,
       commitDetail: this.commitDetail,
       diff: this.diff,
+      cherryPick: this.cherryPick,
+      openDiffInEditor: query => this.openDiffInEditor(query),
       output: this.options.output,
       post: message => {
         void view.webview.postMessage(message);
@@ -114,6 +134,11 @@ export class GitWorkbenchViewProvider
     this.webviewReady = false;
 
     const messageSubscription = view.webview.onDidReceiveMessage(message => {
+      if (isWebviewEvent(message)) {
+        this.handleWebviewEvent(message);
+        return;
+      }
+
       // 첫 메시지가 도착했다는 것은 webview의 listener가 붙었다는 뜻이다.
       if (!this.webviewReady) {
         this.webviewReady = true;
@@ -151,9 +176,133 @@ export class GitWorkbenchViewProvider
     this.post({ type: 'route/commitLog' });
   }
 
+  /**
+   * 변경 파일을 VS Code 기본 diff 편집기에서 연다.
+   * 하단 패널은 폭이 좁아서 실제 코드를 읽기에는 편집기 영역이 낫다.
+   */
+  public async openDiffInEditor(query: {
+    repositoryId: string;
+    commitHash: string;
+    parentIndex: number;
+    oldPath?: string;
+    newPath: string;
+  }): Promise<void> {
+    const repository = this.resolver.getById(query.repositoryId);
+    const cwd = repository.rootUri.fsPath;
+    const source = new vscode.CancellationTokenSource();
+
+    try {
+      const commitHash = assertCommitHash(query.commitHash);
+      const newPath = assertRelativePath(query.newPath);
+      const oldPath = query.oldPath
+        ? assertRelativePath(query.oldPath)
+        : newPath;
+
+      const summary = await this.commitDetail.loadSummary(
+        cwd,
+        commitHash,
+        source.token,
+      );
+      const parentIndex = Math.min(
+        Math.max(0, Math.floor(query.parentIndex)),
+        Math.max(0, summary.parentHashes.length - 1),
+      );
+      const parentHash = summary.parentHashes[parentIndex];
+
+      // root commit이거나 추가/삭제된 파일은 한쪽이 없다. 그쪽은 빈 문서로 연다.
+      const [oldExists, newExists] = await Promise.all([
+        parentHash
+          ? this.blobExists(cwd, parentHash, oldPath, source.token)
+          : Promise.resolve(false),
+        this.blobExists(cwd, commitHash, newPath, source.token),
+      ]);
+
+      const left = toContentUri(oldPath, {
+        repositoryId: query.repositoryId,
+        revision: oldExists && parentHash ? parentHash : '',
+      });
+      const right = toContentUri(newPath, {
+        repositoryId: query.repositoryId,
+        revision: newExists ? commitHash : '',
+      });
+
+      const label = oldPath === newPath ? newPath : `${oldPath} → ${newPath}`;
+      const title = `${label} (${
+        parentHash ? parentHash.slice(0, 7) : '없음'
+      } ↔ ${commitHash.slice(0, 7)})`;
+
+      await vscode.commands.executeCommand('vscode.diff', left, right, title, {
+        preview: true,
+      });
+    } finally {
+      source.dispose();
+    }
+  }
+
+  private async blobExists(
+    cwd: string,
+    revision: string,
+    relativePath: string,
+    token: vscode.CancellationToken,
+  ): Promise<boolean> {
+    try {
+      await this.runner.run(
+        cwd,
+        ['cat-file', '-e', `${revision}:${relativePath}`],
+        token,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   public refresh(): void {
     this.cache.clear();
     this.post({ type: 'refresh' });
+  }
+
+  /**
+   * webview HTML을 다시 넣어 스크립트를 처음부터 실행한다.
+   * refresh()는 살아 있는 화면에 알림만 보내므로 화면이 죽었을 때는 소용이 없다.
+   * getWebviewHtml은 매번 새 nonce를 넣어 HTML이 달라지므로 VS Code가 반드시 다시 로드한다.
+   */
+  public reloadView(): void {
+    if (!this.view) {
+      void vscode.commands.executeCommand('gitWorkbench.main.focus');
+      return;
+    }
+
+    this.options.output.appendLine('[webview] 화면을 다시 로드한다.');
+    this.cache.clear();
+    // 새 스크립트가 첫 메시지를 보낼 때까지 알림을 큐에 모은다.
+    this.webviewReady = false;
+    this.view.webview.html = getWebviewHtml(
+      this.view.webview,
+      this.options.context.extensionUri,
+    );
+  }
+
+  private handleWebviewEvent(event: WebviewEvent): void {
+    switch (event.type) {
+      case 'webview/error':
+        this.options.output.appendLine(`[webview] 오류: ${event.message}`);
+
+        if (event.stack) {
+          this.options.output.appendLine(event.stack);
+        }
+
+        if (event.componentStack) {
+          this.options.output.appendLine(
+            `[webview] component stack:${event.componentStack}`,
+          );
+        }
+        break;
+
+      case 'webview/reload':
+        this.reloadView();
+        break;
+    }
   }
 
   public dispose(): void {
@@ -190,19 +339,47 @@ export class GitWorkbenchViewProvider
   }
 
   private subscribeToRepositoryEvents(): void {
+    // 내장 Git extension의 state.onDidChange는 파일 저장·index 갱신마다 자주 울린다.
+    // 그대로 흘려보내면 webview가 매번 다시 읽어서 화면이 깜빡인다.
+    // 실제로 의미 있게 바뀐 경우에만, 그것도 묶어서 한 번만 알린다.
     const notifyChange = (): void => {
-      this.cache.clear();
-      this.post({ type: 'repositories/changed' });
+      if (this.changeTimer !== undefined) {
+        clearTimeout(this.changeTimer);
+      }
+
+      this.changeTimer = setTimeout(() => {
+        this.changeTimer = undefined;
+
+        const signature = this.repositorySignature();
+
+        if (signature === this.lastRepositorySignature) {
+          this.options.output.appendLine(
+            '[refresh] git state 이벤트를 받았지만 바뀐 것이 없어 무시한다.',
+          );
+          return;
+        }
+
+        this.options.output.appendLine(
+          '[refresh] repository 상태가 바뀌어 webview에 갱신을 알린다.',
+        );
+        this.lastRepositorySignature = signature;
+        this.cache.clear();
+        this.post({ type: 'repositories/changed' });
+      }, REPOSITORY_CHANGE_DEBOUNCE_MS);
     };
 
-    const watchState = (repository: { state: { onDidChange: vscode.Event<void> } }): void => {
+    const watchState = (repository: {
+      state: { onDidChange: vscode.Event<void> };
+    }): void => {
       this.disposables.push(repository.state.onDidChange(notifyChange));
     };
 
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration(event => {
         if (event.affectsConfiguration('gitWorkbench')) {
-          notifyChange();
+          // 설정 변경은 드물고 즉시 반영되어야 한다.
+          this.cache.clear();
+          this.post({ type: 'repositories/changed' });
         }
       }),
       this.options.gitApi.onDidOpenRepository(repository => {
@@ -211,10 +388,44 @@ export class GitWorkbenchViewProvider
         notifyChange();
       }),
       this.options.gitApi.onDidCloseRepository(notifyChange),
+      new vscode.Disposable(() => {
+        if (this.changeTimer !== undefined) {
+          clearTimeout(this.changeTimer);
+          this.changeTimer = undefined;
+        }
+      }),
     );
 
     for (const repository of this.options.gitApi.repositories) {
       watchState(repository);
     }
+
+    this.lastRepositorySignature = this.repositorySignature();
   }
+
+  /**
+   * 화면을 다시 그릴 이유가 되는 값만 모은다.
+   * 저장소 목록, 현재 branch, HEAD commit이 그대로면 알리지 않는다.
+   */
+  private repositorySignature(): string {
+    return this.options.gitApi.repositories
+      .map(repository =>
+        [
+          repository.rootUri.toString(),
+          repository.state.HEAD?.name ?? '',
+          repository.state.HEAD?.commit ?? '',
+        ].join('|'),
+      )
+      .sort()
+      .join('\n');
+  }
+}
+
+function isWebviewEvent(message: unknown): message is WebviewEvent {
+  if (!message || typeof message !== 'object') {
+    return false;
+  }
+
+  const type = (message as { type?: unknown }).type;
+  return type === 'webview/error' || type === 'webview/reload';
 }

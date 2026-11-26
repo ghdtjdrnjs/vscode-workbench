@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CherryPickService } from '../../../src/git/CherryPickService';
 import { CommitDetailService } from '../../../src/git/CommitDetailService';
 import { CommitLogService } from '../../../src/git/CommitLogService';
 import { DiffService } from '../../../src/git/DiffService';
@@ -590,5 +591,262 @@ describe('pagination', () => {
     expect(second.entries.every(entry => entry.pathAtCommit === 'a.txt')).toBe(
       true,
     );
+  });
+});
+
+describe('commit hash 검색', () => {
+  async function commitBySubject(subject: string) {
+    const page = await commitLog.load(
+      { repositoryId: repositoryId(), filters: { allRefs: true }, limit: 100 },
+      newToken(),
+    );
+    const found = page.commits.find(commit => commit.subject === subject);
+
+    if (!found) {
+      throw new Error(`commit not found: ${subject}`);
+    }
+
+    return found;
+  }
+
+  it('전체 hash를 넣으면 그 커밋이 나온다', async () => {
+    const target = await commitBySubject('refactor: rename a.ts to b.ts');
+
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: target.hash },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    expect(page.commits[0].hash).toBe(target.hash);
+  });
+
+  it('짧은 hash 접두어도 찾는다', async () => {
+    const target = await commitBySubject('docs: 한글 경로 문서 추가');
+
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: target.shortHash },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    expect(page.commits[0].hash).toBe(target.hash);
+  });
+
+  it('대문자로 넣어도 찾는다', async () => {
+    const target = await commitBySubject('feat: add a.ts');
+
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: target.shortHash.toUpperCase() },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    expect(page.commits[0].hash).toBe(target.hash);
+  });
+
+  it('hash가 아닌 검색어는 기존 메시지 검색 그대로다', async () => {
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: '한글' },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    expect(page.commits).toHaveLength(2);
+    expect(page.commits.every(commit => commit.subject.includes('한글'))).toBe(
+      true,
+    );
+  });
+
+  it('존재하지 않는 hash 모양 문자열은 오류 없이 빈 결과가 된다', async () => {
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: 'deadbeefdeadbeef' },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    expect(page.commits).toEqual([]);
+  });
+
+  it('hash로 찾은 커밋이 메시지 검색 결과와 겹쳐도 중복되지 않는다', async () => {
+    const target = await commitBySubject('feat: add a.ts');
+
+    const page = await commitLog.load(
+      {
+        repositoryId: repositoryId(),
+        filters: { allRefs: true, message: target.hash },
+        limit: 100,
+      },
+      newToken(),
+    );
+
+    const occurrences = page.commits.filter(
+      commit => commit.hash === target.hash,
+    );
+    expect(occurrences).toHaveLength(1);
+  });
+});
+
+describe('CherryPickService', () => {
+  let pickDir: string;
+  let pickRoot: string;
+  let services: ReturnType<typeof createServices>;
+  let cherry: CherryPickService;
+
+  function git(...args: string[]): string {
+    return execFileSync('git', args, { cwd: pickRoot, encoding: 'utf8' });
+  }
+
+  beforeAll(() => {
+    pickDir = mkdtempSync(join(tmpdir(), 'gwb-pick-'));
+    pickRoot = join(pickDir, 'repo');
+    execFileSync('git', ['init', '-q', '-b', 'main', pickRoot], { stdio: 'pipe' });
+    git('config', 'user.name', 'tester');
+    git('config', 'user.email', 'tester@example.com');
+
+    writeFileSync(join(pickRoot, 'base.txt'), 'base\n');
+    git('add', 'base.txt');
+    git('commit', '-q', '-m', 'base');
+
+    // feature 브랜치에만 있는 커밋 두 개
+    git('checkout', '-q', '-b', 'feature');
+    writeFileSync(join(pickRoot, 'feature.txt'), 'feature\n');
+    git('add', 'feature.txt');
+    git('commit', '-q', '-m', 'add feature.txt');
+
+    writeFileSync(join(pickRoot, 'base.txt'), 'base changed on feature\n');
+    git('add', 'base.txt');
+    git('commit', '-q', '-m', 'edit base.txt on feature');
+
+    git('checkout', '-q', 'main');
+
+    services = createServices(pickRoot);
+    cherry = new CherryPickService(
+      services.runner,
+      services.resolver,
+      services.cache,
+    );
+  });
+
+  afterAll(() => {
+    rmSync(pickDir, { recursive: true, force: true });
+  });
+
+  function pickRepositoryId(): string {
+    return services.resolver.list()[0].id;
+  }
+
+  function hashOf(ref: string): string {
+    return git('rev-parse', ref).trim();
+  }
+
+  it('충돌 없는 커밋을 현재 브랜치에 적용한다', async () => {
+    const target = hashOf('feature~1');
+
+    const outcome = await cherry.run(pickRepositoryId(), target, newToken());
+
+    expect(outcome.status).toBe('applied');
+    expect(outcome.subject).toBe('add feature.txt');
+    // 새 커밋이 main 위에 생긴다.
+    expect(git('log', '--format=%s', '-1', 'main').trim()).toBe(
+      'add feature.txt',
+    );
+  });
+
+  it('커밋 제목을 확인 대화상자용으로 읽어 온다', async () => {
+    const subject = await cherry.describe(
+      pickRepositoryId(),
+      hashOf('feature'),
+      newToken(),
+    );
+
+    expect(subject).toBe('edit base.txt on feature');
+  });
+
+  it('작업 디렉터리가 더러우면 시작하지 않는다', async () => {
+    writeFileSync(join(pickRoot, 'base.txt'), 'dirty\n');
+
+    await expect(
+      cherry.run(pickRepositoryId(), hashOf('feature'), newToken()),
+    ).rejects.toMatchObject({ code: 'WORKING_TREE_DIRTY' });
+
+    git('checkout', '--', 'base.txt');
+  });
+
+  it('충돌이 나면 conflict로 알리고 예외를 던지지 않는다', async () => {
+    // main에서 같은 줄을 다르게 바꿔 충돌을 만든다.
+    writeFileSync(join(pickRoot, 'base.txt'), 'base changed on main\n');
+    git('add', 'base.txt');
+    git('commit', '-q', '-m', 'edit base.txt on main');
+
+    const outcome = await cherry.run(
+      pickRepositoryId(),
+      hashOf('feature'),
+      newToken(),
+    );
+
+    expect(outcome.status).toBe('conflict');
+    expect(outcome.message).toContain('충돌');
+
+    // 멈춘 상태에서 다시 시도하면 명확히 거부한다.
+    await expect(
+      cherry.run(pickRepositoryId(), hashOf('feature'), newToken()),
+    ).rejects.toMatchObject({ code: 'CHERRY_PICK_CONFLICT' });
+
+    execFileSync('git', ['cherry-pick', '--abort'], { cwd: pickRoot });
+  });
+
+  it('hash 형식이 아니면 거부한다', async () => {
+    await expect(
+      cherry.run(pickRepositoryId(), 'not-a-hash', newToken()),
+    ).rejects.toMatchObject({ code: 'INVALID_REVISION' });
+  });
+});
+
+describe('git 경로 지연 해석', () => {
+  it('경로 해석이 실패해도 거부된 Promise로 끝난다', async () => {
+    // 확장 시작 시점에 내장 Git이 아직 git 실행 파일을 못 찾은 상황.
+    // 생성자에서 확정했다면 여기까지 오지 못하고 활성화 자체가 실패한다.
+    const lazy = new GitProcessRunner(() => {
+      throw new Error('Git executable path is not available');
+    }, createOutputChannel() as never);
+
+    await expect(
+      lazy.run(repoRoot, ['log', '--format=%H'], newToken()),
+    ).rejects.toThrow(/not available/);
+  });
+
+  it('나중에 준비되면 그때부터 정상 동작한다', async () => {
+    let ready = false;
+    const lazy = new GitProcessRunner(() => {
+      if (!ready) {
+        throw new Error('아직 준비되지 않음');
+      }
+      return 'git';
+    }, createOutputChannel() as never);
+
+    await expect(
+      lazy.run(repoRoot, ['rev-parse', 'HEAD'], newToken()),
+    ).rejects.toThrow(/준비되지 않음/);
+
+    ready = true;
+
+    const result = await lazy.runText(repoRoot, ['rev-parse', 'HEAD'], newToken());
+    expect(result.trim()).toMatch(/^[0-9a-f]{40}$/);
   });
 });

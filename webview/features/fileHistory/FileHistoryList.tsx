@@ -6,6 +6,7 @@ interface FileHistoryListProps {
   entries: readonly FileHistoryEntry[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  onContextMenu?: (index: number, x: number, y: number) => void;
   onReachEnd?: () => void;
 }
 
@@ -15,6 +16,7 @@ export function FileHistoryList({
   entries,
   selectedIndex,
   onSelect,
+  onContextMenu,
   onReachEnd,
 }: FileHistoryListProps): JSX.Element {
   return (
@@ -24,6 +26,7 @@ export function FileHistoryList({
       ariaLabel="파일 수정 이력"
       selectedIndex={selectedIndex}
       onSelect={onSelect}
+      onContextMenu={onContextMenu}
       onReachEnd={onReachEnd}
       keyOf={entry => entry.hash}
       renderRow={entry => (

@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  esbuild: { jsx: 'automatic' },
   resolve: {
     alias: {
       // Extension Host 없이 서비스 계층을 실제 Git 저장소에 대해 실행한다.
@@ -9,8 +10,9 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['test/unit/**/*.test.ts'],
+    include: ['test/unit/**/*.test.ts', 'test/unit/**/*.test.tsx'],
     environment: 'node',
+    setupFiles: [resolve(__dirname, 'test/setup/jsdom.ts')],
     testTimeout: 30_000,
   },
 });

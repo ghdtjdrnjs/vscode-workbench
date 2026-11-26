@@ -36,14 +36,16 @@ export function BranchTree({
 
   return (
     <div className="branch-tree">
-      <input
-        className="branch-filter"
-        type="search"
-        value={filter}
-        placeholder="브랜치 필터"
-        aria-label="브랜치 필터"
-        onChange={event => setFilter(event.currentTarget.value)}
-      />
+      <div className="branch-tree-header">
+        <input
+          className="branch-filter"
+          type="search"
+          value={filter}
+          placeholder="브랜치 필터"
+          aria-label="브랜치 필터"
+          onChange={event => setFilter(event.currentTarget.value)}
+        />
+      </div>
 
       <div className="branch-scroll" role="tree" aria-label="브랜치 목록">
         <button

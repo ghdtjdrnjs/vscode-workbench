@@ -19,7 +19,9 @@
   "extensionDependencies": [
     "vscode.git"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
@@ -43,6 +45,12 @@
         "category": "Git Workbench",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "gitWorkbench.reloadView",
+        "category": "Git Workbench",
+        "title": "Reload View",
+        "icon": "$(debug-restart)"
       }
     ],
     "submenus": [
@@ -85,7 +93,12 @@
         {
           "command": "gitWorkbench.refresh",
           "when": "view == gitWorkbench.main",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitWorkbench.reloadView",
+          "when": "view == gitWorkbench.main",
+          "group": "navigation@2"
         }
       ]
     },
@@ -145,13 +158,16 @@
     "watch": "node esbuild.mjs --watch",
     "test:unit": "vitest run",
     "test:extension": "vscode-test",
-    "package": "npm run check-types && npm run lint && npm run test:unit && node esbuild.mjs --production && vsce package --allow-missing-repository"
+    "package": "npm run check-types && npm run lint && npm run test:unit && node esbuild.mjs --production && vsce package --allow-missing-repository",
+    "harness": "node esbuild.mjs && python3 -m http.server 8777"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.12",
@@ -162,6 +178,7 @@
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.24.0",
     "eslint": "^9.39.5",
+    "jsdom": "^29.1.1",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.66.0",
     "vitest": "^2.1.5"

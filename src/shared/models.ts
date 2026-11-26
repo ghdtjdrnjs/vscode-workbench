@@ -139,4 +139,6 @@ export type GitWorkbenchErrorCode =
   | 'PARSER_FAILED'
   | 'UNSUPPORTED_WORKSPACE'
   | 'NO_HISTORY'
+  | 'WORKING_TREE_DIRTY'
+  | 'CHERRY_PICK_CONFLICT'
   | 'UNKNOWN';

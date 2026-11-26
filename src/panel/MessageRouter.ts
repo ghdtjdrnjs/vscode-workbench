@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { CherryPickService } from '../git/CherryPickService';
 import type { CommitDetailService } from '../git/CommitDetailService';
 import type { CommitLogService } from '../git/CommitLogService';
 import type { DiffService } from '../git/DiffService';
@@ -22,6 +23,15 @@ export interface MessageRouterDeps {
   commitLog: CommitLogService;
   commitDetail: CommitDetailService;
   diff: DiffService;
+  cherryPick: CherryPickService;
+  /** 변경 파일을 VS Code diff 편집기에서 연다. */
+  openDiffInEditor: (query: {
+    repositoryId: string;
+    commitHash: string;
+    parentIndex: number;
+    oldPath?: string;
+    newPath: string;
+  }) => Promise<void>;
   output: vscode.OutputChannel;
   post: (message: ExtensionResponse) => void;
 }
@@ -181,6 +191,60 @@ export class MessageRouter implements vscode.Disposable {
         return { type: 'diff/result', requestId: request.requestId, diff };
       }
 
+      case 'diff/openInEditor': {
+        await this.deps.openDiffInEditor({
+          repositoryId: request.repositoryId,
+          commitHash: request.commitHash,
+          parentIndex: request.parentIndex,
+          oldPath: request.oldPath,
+          newPath: request.newPath,
+        });
+        return { type: 'diff/openedInEditor', requestId: request.requestId };
+      }
+
+      case 'commit/cherryPick': {
+        const subject = await this.deps.cherryPick.describe(
+          request.repositoryId,
+          request.commitHash,
+          token,
+        );
+
+        // 저장소를 바꾸는 유일한 동작이다. 반드시 확인을 받는다.
+        const confirm = await vscode.window.showWarningMessage(
+          `이 커밋을 현재 브랜치에 적용할까요?\n\n${request.commitHash.slice(0, 7)}  ${subject}`,
+          { modal: true, detail: 'cherry-pick은 현재 브랜치에 새 커밋을 만듭니다.' },
+          'Cherry-Pick',
+        );
+
+        if (confirm !== 'Cherry-Pick') {
+          return {
+            type: 'commit/cherryPickResult',
+            requestId: request.requestId,
+            status: 'cancelled',
+            message: '취소했습니다.',
+          };
+        }
+
+        const outcome = await this.deps.cherryPick.run(
+          request.repositoryId,
+          request.commitHash,
+          token,
+        );
+
+        if (outcome.status === 'applied') {
+          void vscode.window.showInformationMessage(outcome.message);
+        } else {
+          void vscode.window.showWarningMessage(outcome.message);
+        }
+
+        return {
+          type: 'commit/cherryPickResult',
+          requestId: request.requestId,
+          status: outcome.status,
+          message: outcome.message,
+        };
+      }
+
       default: {
         const exhaustive: never = request;
         throw new GitWorkbenchError(
@@ -315,6 +379,20 @@ function validateRequest(raw: unknown): WebviewRequest | undefined {
         typeof message.parentIndex === 'number' &&
         typeof message.newPath === 'string' &&
         (message.mode === 'changes' || message.mode === 'full')
+        ? (message as unknown as WebviewRequest)
+        : undefined;
+
+    case 'diff/openInEditor':
+      return typeof message.repositoryId === 'string' &&
+        typeof message.commitHash === 'string' &&
+        typeof message.parentIndex === 'number' &&
+        typeof message.newPath === 'string'
+        ? (message as unknown as WebviewRequest)
+        : undefined;
+
+    case 'commit/cherryPick':
+      return typeof message.repositoryId === 'string' &&
+        typeof message.commitHash === 'string'
         ? (message as unknown as WebviewRequest)
         : undefined;
 

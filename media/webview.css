@@ -149,36 +149,76 @@ select {
 .split-pane {
   display: flex;
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   width: 100%;
 }
 
+/*
+ * 크기는 오직 드래그 비율이 정한다.
+ * flex-shrink를 열어 두면 반대쪽에 로드된 내용이 길 때 이쪽이 밀려서,
+ * divider가 왼쪽으로 튀고 다시 오른쪽으로 가지 않는 것처럼 보인다.
+ */
 .split-pane-first {
+  flex: 0 0 auto;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
+/*
+ * 한계는 layout 시점에 브라우저가 강제한다.
+ * JS로 크기를 재서 비율을 고쳐 쓰면 리레이아웃마다 저장값이 밀려
+ * 결국 한쪽 끝에 고정된다. 89px = 최소 80px + 손잡이 9px.
+ */
+.split-pane:not(.vertical) > .split-pane-first {
+  min-width: 80px;
+  max-width: calc(100% - 89px);
+}
+
+.split-pane.vertical > .split-pane-first {
+  min-height: 80px;
+  max-height: calc(100% - 89px);
+}
+
+/*
+ * flex-basis를 0으로 둬야 남은 공간만 차지한다.
+ * auto로 두면 내용의 min-content 크기가 최소값이 되어 컨텐츠마다 한계가 달라진다.
+ */
 .split-pane-second {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
+/*
+ * 잡을 수 있는 폭은 9px로 넓게 두고, 보이는 선은 가운데 1px만 그린다.
+ * 4px짜리 선은 정확히 겨냥해야 해서 드래그가 잘 안 잡힌다.
+ */
 .split-handle {
-  flex: 0 0 4px;
+  flex: 0 0 9px;
+  position: relative;
   cursor: col-resize;
-  background: var(--vscode-panel-border);
-  opacity: 0.5;
+  background: transparent;
+  touch-action: none;
 }
 
-.split-handle:hover,
-.split-handle.dragging {
+.split-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 4px;
+  background: var(--vscode-panel-border);
+}
+
+.split-handle:hover::after,
+.split-handle.dragging::after {
+  inset: 0 3px;
   background: var(--vscode-focusBorder);
-  opacity: 1;
 }
 
 /* ---------- 가상 목록 ---------- */
@@ -189,6 +229,8 @@ select {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 스크롤바가 생겼다 사라지며 폭이 흔들리면 ResizeObserver가 계속 울린다. */
+  scrollbar-gutter: stable;
 }
 
 .virtual-sizer {
@@ -332,6 +374,7 @@ select {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -431,19 +474,14 @@ select {
 
 /* ---------- Commit 상세 ---------- */
 
-.commit-details {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
 .detail-scroll {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  max-height: 55%;
 }
 
 .detail-subject {
@@ -461,7 +499,8 @@ select {
 
 .detail-meta {
   display: grid;
-  grid-template-columns: auto 1fr;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 2px 10px;
   margin: 0 0 8px;
 }
@@ -510,6 +549,7 @@ select {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -536,6 +576,7 @@ select {
 }
 
 .file-path {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -612,6 +653,7 @@ select {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -654,8 +696,14 @@ select {
   color: var(--vscode-button-foreground);
 }
 
+/*
+ * min-width: 0이 없으면 이 flex 항목의 자동 최소 크기가 min-content가 되고,
+ * 안쪽 .diff-lines가 min-width: max-content라서 가장 긴 diff 줄이
+ * 우측 패널 전체의 최소 폭이 되어 버린다. 가로 스크롤은 여기서 처리한다.
+ */
 .diff-body {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
 }
@@ -788,6 +836,11 @@ select {
   white-space: pre-wrap;
 }
 
+.state-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .spinner {
   width: 12px;
   height: 12px;
@@ -825,4 +878,177 @@ select {
 
 .repo-select {
   max-width: 240px;
+}
+
+/* ---------- 브랜치 영역 접기/펼치기 ---------- */
+
+.log-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 접혔을 때 남는 세로 막대. 폭을 최소로 유지한다. */
+.branch-rail {
+  display: flex;
+  flex: 0 0 24px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-right: 1px solid var(--vscode-panel-border);
+  overflow: hidden;
+}
+
+.rail-label {
+  writing-mode: vertical-rl;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.rail-toggle {
+  flex: 0 0 auto;
+  width: 18px;
+  padding: 0;
+  line-height: 1.2;
+  border-radius: 3px;
+}
+
+.branch-tree-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px;
+  flex: 0 0 auto;
+}
+
+.branch-tree-header .branch-filter {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- 컨텍스트 메뉴 ---------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 2px;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.context-menu-item {
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  text-align: left;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+}
+
+/* ---------- 세로 SplitPane ---------- */
+
+.split-pane.vertical {
+  flex-direction: column;
+}
+
+.split-pane.vertical > .split-pane-first {
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-pane.vertical > .split-pane-second {
+  width: 100%;
+  min-height: 0;
+}
+
+body.resizing.vertical-resize {
+  cursor: row-resize;
+}
+
+.split-pane.vertical > .split-handle {
+  flex: 0 0 9px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.split-pane.vertical > .split-handle::after {
+  inset: 4px 0;
+}
+
+.split-pane.vertical > .split-handle:hover::after,
+.split-pane.vertical > .split-handle.dragging::after {
+  inset: 3px 0;
+}
+
+/* 드래그 중 텍스트가 선택되면 화면이 깨져 보인다. */
+body.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* ---------- 좁은 폭에서 깨지지 않도록 ---------- */
+
+.diff-toolbar {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.detail-nav {
+  min-width: 0;
+}
+
+.detail-meta dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.changed-files-header {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+/* ---------- 탭 바 상태 표시 ---------- */
+
+.tab-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.tab-status.error {
+  color: var(--vscode-errorForeground);
+}
+
+.spinner.small {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+.open-editor-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }

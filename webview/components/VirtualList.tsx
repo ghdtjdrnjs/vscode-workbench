@@ -8,6 +8,8 @@ interface VirtualListProps<T> {
   selectedIndex: number;
   onSelect: (index: number) => void;
   onActivate?: (index: number) => void;
+  /** 행을 우클릭했을 때. 컨텍스트 메뉴용. */
+  onContextMenu?: (index: number, x: number, y: number) => void;
   /** 마지막 행이 보이면 호출한다. 무한 스크롤용. */
   onReachEnd?: () => void;
   renderRow: (item: T, index: number, selected: boolean) => React.ReactNode;
@@ -26,6 +28,7 @@ export function VirtualList<T>({
   selectedIndex,
   onSelect,
   onActivate,
+  onContextMenu,
   onReachEnd,
   renderRow,
   keyOf,
@@ -41,16 +44,23 @@ export function VirtualList<T>({
       return undefined;
     }
 
+    // 값이 실제로 바뀐 경우에만 갱신한다.
+    // 매번 setState하면 렌더 -> 스크롤바 변화 -> 다시 관측으로 이어지는
+    // ResizeObserver 루프가 생겨 화면이 계속 떨린다.
     const observer = new ResizeObserver(entries => {
       const entry = entries[0];
 
-      if (entry) {
-        setViewportHeight(entry.contentRect.height);
+      if (!entry) {
+        return;
       }
+
+      const next = Math.round(entry.contentRect.height);
+
+      setViewportHeight(current => (current === next ? current : next));
     });
 
     observer.observe(element);
-    setViewportHeight(element.clientHeight);
+    setViewportHeight(Math.round(element.clientHeight));
 
     return () => observer.disconnect();
   }, []);
@@ -139,6 +149,14 @@ export function VirtualList<T>({
         style={{ top: index * rowHeight, height: rowHeight }}
         onClick={() => onSelect(index)}
         onDoubleClick={() => onActivate?.(index)}
+        onContextMenu={event => {
+          if (!onContextMenu) {
+            return;
+          }
+          event.preventDefault();
+          onSelect(index);
+          onContextMenu(index, event.clientX, event.clientY);
+        }}
       >
         {renderRow(item, index, selected)}
       </div>,

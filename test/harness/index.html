@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--
+  VS Code 없이 webview를 실제 브라우저에서 띄우는 하네스.
+  Extension Host 대신 가짜 응답을 돌려주므로 레이아웃과 드래그 동작을 그대로 확인할 수 있다.
+
+    npm run harness   →  http://127.0.0.1:8777/test/harness/
+
+  레이아웃 버그는 VS Code가 아니라 브라우저 엔진에서 재현된다. webview는 Chromium 페이지다.
+-->
+<html lang="ko"><head><meta charset="UTF-8"/>
+<link rel="stylesheet" href="../../media/webview.css"/>
+<style>
+  /* VS Code 패널과 같은 조건: 고정 크기 컨테이너 */
+  html,body{margin:0;padding:0}
+  #root{width:1200px;height:420px;overflow:hidden}
+</style>
+</head><body><div id="root"></div>
+<script>
+// acquireVsCodeApi 스텁 — 실제 Extension Host 대신 가짜 응답을 돌려준다.
+let state = {};
+const LONG = 'feat: 아주 긴 커밋 제목 ' + 'x'.repeat(160);
+function commit(i){
+  const h = String(i).padStart(40,'0');
+  return {hash:h, shortHash:h.slice(0,7), parentHashes:[String(i+1).padStart(40,'0')],
+    authorName:'홍길동', authorEmail:'h@e.com', authorDate:'2024-01-01T00:00:00+09:00',
+    subject: i===0 ? LONG : 'commit '+i, decorations:[]};
+}
+const COMMITS = Array.from({length:60},(_,i)=>commit(i));
+window.acquireVsCodeApi = () => ({
+  getState: () => state,
+  setState: s => { state = s; return s; },
+  postMessage: (m) => {
+    const id = m.requestId;
+    let res;
+    switch(m.type){
+      case 'ping': res={type:'pong',requestId:id}; break;
+      case 'repository/list': res={type:'repository/listResult',requestId:id,
+        repositories:[{id:'r1',rootUri:'file:///r',name:'my-repo',headName:'main'}],
+        settings:{commitPageSize:200,fileHistoryPageSize:100,showCommitGraph:true}}; break;
+      case 'refs/load': res={type:'refs/result',requestId:id,refs:[
+        {fullName:'refs/heads/main',shortName:'main',kind:'local',commitHash:COMMITS[0].hash,isCurrent:true,isSymbolic:false}]}; break;
+      case 'commitLog/search': res={type:'commitLog/result',requestId:id,commits:COMMITS,hasMore:false}; break;
+      case 'commitDetail/load': res={type:'commitDetail/result',requestId:id,detail:{
+        ...COMMITS[0], parentIndex:0, containingBranches:[],
+        changedFiles:[{status:'M',newPath:'src/some/very/long/path/that/keeps/going/for/a/while/file.ts'}]}}; break;
+      case 'diff/load': res={type:'diff/result',requestId:id,diff:{
+        repositoryId:'r1',commitHash:COMMITS[0].hash,parentIndex:0,
+        oldFile:{exists:true,path:'a.ts'},newFile:{exists:true,path:'a.ts'},
+        status:'M',binary:false,truncated:false,fullViewAvailable:true,
+        hunks:[{header:'@@ -1,3 +1,3 @@',oldStart:1,oldLines:3,newStart:1,newLines:3,lines:[
+          {type:'context',content:'x'.repeat(400),oldLineNumber:1,newLineNumber:1},
+          {type:'delete',content:'old',oldLineNumber:2},
+          {type:'add',content:'new',newLineNumber:2}]}]}}; break;
+      default: return;
+    }
+    setTimeout(()=>window.postMessage(res,'*'),0);
+  }
+});
+</script>
+<script src="../../media/webview.js"></script>
+</body></html>

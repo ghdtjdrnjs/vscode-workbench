@@ -49,12 +49,13 @@ const extensionTestConfig = {
 };
 
 if (watch) {
+  console.log('[esbuild] build started');
   const contexts = await Promise.all([
     esbuild.context(extensionConfig),
     esbuild.context(webviewConfig),
   ]);
   await Promise.all(contexts.map(context => context.watch()));
-  console.log('[esbuild] watching...');
+  console.log('[esbuild] watching');
 } else {
   await Promise.all([
     esbuild.build(extensionConfig),
